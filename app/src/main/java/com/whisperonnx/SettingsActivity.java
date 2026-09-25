@@ -294,7 +294,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void ensureNetworkAccess() {
         String base = sp.getString("remoteEndpoint", "");
         if (base == null || base.trim().isEmpty()) {
-            base = "https://giga-ki04-11436.sandstorm.cvis.uni-due.de";
+            base = com.whisperonnx.asr.RemoteAsrBackend.DEFAULT_ENDPOINT;
         }
         base = base.trim();
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);

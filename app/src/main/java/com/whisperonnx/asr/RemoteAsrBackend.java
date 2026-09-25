@@ -33,7 +33,7 @@ public class RemoteAsrBackend {
     private static final MediaType JSON_MEDIA = MediaType.parse("application/json; charset=utf-8");
     private static final MediaType WAV_MEDIA = MediaType.parse("audio/wav");
 
-    private static final String DEFAULT_ENDPOINT = "https://giga-ki04-11436.sandstorm.cvis.uni-due.de";
+    public static final String DEFAULT_ENDPOINT = "https://giga-ki04-11436.sandstorm.cvis.uni-due.de";
     private static final String DEFAULT_MODEL = "Qwen/Qwen3-ASR-1.7B";
 
     private final OkHttpClient http;
@@ -171,7 +171,7 @@ public class RemoteAsrBackend {
     }
 
     /** Wrap 16 kHz mono PCM16 LE bytes in a canonical 44-byte WAV header. */
-    public static byte[] pcm16ToWav(byte[] pcm) {
+    private static byte[] pcm16ToWav(byte[] pcm) {
         int dataSize = pcm.length;
         ByteBuffer bb = ByteBuffer.allocate(44 + dataSize).order(ByteOrder.LITTLE_ENDIAN);
         bb.put((byte) 'R').put((byte) 'I').put((byte) 'F').put((byte) 'F');
