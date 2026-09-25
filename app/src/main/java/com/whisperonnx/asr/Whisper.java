@@ -232,6 +232,12 @@ public class Whisper {
                         Log.e(TAG, "Remote ASR error: " + message);
                         sendUpdate(message);
                     }
+
+                    @Override
+                    public void onStatus(String message) {
+                        Log.d(TAG, "Remote status: " + message);
+                        sendUpdate(message);
+                    }
                 });
     }
 

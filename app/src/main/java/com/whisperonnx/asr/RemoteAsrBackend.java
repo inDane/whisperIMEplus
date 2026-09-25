@@ -26,6 +26,7 @@ public class RemoteAsrBackend {
     public interface RemoteListener {
         void onResult(String text, String language);
         void onError(String message);
+        void onStatus(String message);
     }
 
     private static final String TAG = "RemoteAsrBackend";
@@ -92,7 +93,7 @@ public class RemoteAsrBackend {
                 }
 
                 if (cleanup) {
-                    text = cleanUp(text, cleanupEndpoint, cleanupToken, cleanupTerms, t1);
+                    text = cleanUp(text, cleanupEndpoint, cleanupToken, cleanupTerms, t1, listener);
                 }
                 Log.d(TAG, "Remote transcription (" + (System.currentTimeMillis() - t0) + " ms total): " + text);
                 listener.onResult(text, lang);
@@ -104,11 +105,18 @@ public class RemoteAsrBackend {
     }
 
     /** LLM cleanup pass: fix punctuation/capitalization. Falls back to original text on any failure. */
-    private String cleanUp(String text, String cleanupEndpoint, String cleanupToken, String cleanupTerms, long t0) {
+    private String cleanUp(String text, String cleanupEndpoint, String cleanupToken, String cleanupTerms,
+                           long t0, RemoteListener listener) {
         try {
             if (cleanupEndpoint == null || cleanupEndpoint.trim().isEmpty()) {
                 Log.w(TAG, "Cleanup enabled but no endpoint configured; skipping");
+                listener.onStatus("Cleanup skipped (no endpoint)");
                 return text;
+            }
+            String url = cleanupEndpoint.trim();
+            if (!url.contains("/v1/chat/completions")) {
+                while (url.endsWith("/")) url = url.substring(0, url.length() - 1);
+                url = url + "/v1/chat/completions";
             }
             String terms = (cleanupTerms == null) ? "" : cleanupTerms.trim();
             String systemPrompt = "You fix punctuation and capitalization of raw speech transcriptions. "
@@ -124,7 +132,7 @@ public class RemoteAsrBackend {
                     .put("chat_template_kwargs", new JSONObject().put("enable_thinking", false));
 
             Request request = new Request.Builder()
-                    .url(cleanupEndpoint.trim())
+                    .url(url)
                     .header("Authorization", "Bearer " + cleanupToken)
                     .header("Content-Type", "application/json")
                     .post(RequestBody.create(payload.toString(), JSON_MEDIA))
@@ -132,19 +140,26 @@ public class RemoteAsrBackend {
 
             try (Response response = http.newCall(request).execute()) {
                 String body = response.body() != null ? response.body().string() : "";
+                long ms = System.currentTimeMillis() - t0;
                 if (!response.isSuccessful()) {
-                    Log.w(TAG, "Cleanup HTTP " + response.code() + ", keeping raw text");
+                    Log.w(TAG, "Cleanup HTTP " + response.code() + " in " + ms + " ms, keeping raw text");
+                    listener.onStatus("Cleanup failed (" + response.code() + "), raw text kept");
                     return text;
                 }
                 JSONObject json = new JSONObject(body);
                 String cleaned = json.getJSONArray("choices")
                         .getJSONObject(0).getJSONObject("message").optString("content", "").trim();
-                if (cleaned.isEmpty()) return text;
-                Log.d(TAG, "Cleanup took " + (System.currentTimeMillis() - t0) + " ms: " + cleaned);
+                if (cleaned.isEmpty()) {
+                    listener.onStatus("Cleanup empty, raw text kept");
+                    return text;
+                }
+                Log.d(TAG, "Cleanup took " + ms + " ms: " + cleaned);
+                listener.onStatus("Cleanup done (" + ms + " ms)");
                 return cleaned;
             }
         } catch (Exception e) {
             Log.w(TAG, "Cleanup failed, keeping raw text: " + e.getMessage());
+            listener.onStatus("Cleanup error: " + e.getClass().getSimpleName() + " — raw text kept");
             return text;
         }
     }
