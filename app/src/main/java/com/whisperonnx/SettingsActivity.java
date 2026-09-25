@@ -294,7 +294,7 @@ public class SettingsActivity extends AppCompatActivity {
     private void ensureNetworkAccess() {
         String base = sp.getString("remoteEndpoint", "");
         if (base == null || base.trim().isEmpty()) {
-            base = com.whisperonnx.asr.RemoteAsrBackend.DEFAULT_ENDPOINT;
+            return; // nothing to probe; the batch path will prompt for an endpoint
         }
         base = base.trim();
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);

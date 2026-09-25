@@ -33,7 +33,6 @@ public class RemoteAsrBackend {
     private static final MediaType JSON_MEDIA = MediaType.parse("application/json; charset=utf-8");
     private static final MediaType WAV_MEDIA = MediaType.parse("audio/wav");
 
-    public static final String DEFAULT_ENDPOINT = "https://giga-ki04-11436.sandstorm.cvis.uni-due.de";
     private static final String DEFAULT_MODEL = "Qwen/Qwen3-ASR-1.7B";
 
     private final OkHttpClient http;
@@ -52,7 +51,11 @@ public class RemoteAsrBackend {
                            RemoteListener listener) {
         long t0 = System.currentTimeMillis();
         try {
-            String base = (endpoint == null || endpoint.trim().isEmpty()) ? DEFAULT_ENDPOINT : endpoint.trim();
+            if (endpoint == null || endpoint.trim().isEmpty()) {
+                listener.onError("No ASR endpoint configured — open Settings and set the endpoint");
+                return;
+            }
+            String base = endpoint.trim();
             if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
             String m = (model == null || model.trim().isEmpty()) ? DEFAULT_MODEL : model.trim();
 
