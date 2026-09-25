@@ -48,7 +48,7 @@
     <string name="setting_remote_token">ASR API key:</string>
     <string name="setting_remote_model">ASR model name:</string>
     <string name="setting_remote_cleanup">LLM cleanup pass:</string>
-    <string name="setting_cleanup_endpoint">Cleanup endpoint (/v1/chat/completions):</string>
+    <string name="setting_cleanup_endpoint">Cleanup endpoint:</string>
     <string name="setting_cleanup_token">Cleanup API key:</string>
     <string name="setting_cleanup_terms">Known terms (optional):</string>
     <string name="asr_mode_local">on-device (local Whisper)</string>

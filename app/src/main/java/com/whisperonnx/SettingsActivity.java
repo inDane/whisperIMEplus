@@ -4,6 +4,8 @@ import android.Manifest;
 import android.annotation.SuppressLint;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
+import android.content.Intent;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Log;
@@ -20,6 +22,7 @@ import android.widget.Toast;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.ActionBar;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
 import androidx.preference.PreferenceManager;
@@ -231,6 +234,7 @@ public class SettingsActivity extends AppCompatActivity {
                 SharedPreferences.Editor editor = sp.edit();
                 editor.putBoolean("remoteMode", i == 1);
                 editor.apply();
+                if (i == 1) ensureNetworkAccess();
             }
 
             @Override
@@ -250,6 +254,8 @@ public class SettingsActivity extends AppCompatActivity {
         editRemoteToken.setText(sp.getString("remoteToken", ""));
         editRemoteModel.setText(sp.getString("remoteModel", ""));
         modeRemoteCleanup.setChecked(sp.getBoolean("remoteCleanup", false));
+        View cleanupFields = findViewById(R.id.layout_cleanup_fields);
+        cleanupFields.setVisibility(sp.getBoolean("remoteCleanup", false) ? View.VISIBLE : View.GONE);
         editCleanupEndpoint.setText(sp.getString("cleanupEndpoint", ""));
         editCleanupToken.setText(sp.getString("cleanupToken", ""));
         editCleanupTerms.setText(sp.getString("cleanupTerms", ""));
@@ -265,6 +271,7 @@ public class SettingsActivity extends AppCompatActivity {
         });
         modeRemoteCleanup.setOnCheckedChangeListener((compoundButton, isChecked) -> {
             sp.edit().putBoolean("remoteCleanup", isChecked).apply();
+            cleanupFields.setVisibility(isChecked ? View.VISIBLE : View.GONE);
         });
         editCleanupEndpoint.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) sp.edit().putString("cleanupEndpoint", editCleanupEndpoint.getText().toString().trim()).apply();
@@ -275,6 +282,54 @@ public class SettingsActivity extends AppCompatActivity {
         editCleanupTerms.setOnFocusChangeListener((v, hasFocus) -> {
             if (!hasFocus) sp.edit().putString("cleanupTerms", editCleanupTerms.getText().toString().trim()).apply();
         });
+    }
+
+    /**
+     * Android 16: apps that have never used the network ship with per-app network
+     * access disabled (a system setting, not a public appop) — requests fail with
+     * UnknownHostException. When the user picks remote mode, probe the configured
+     * endpoint; any HTTP response (even the expected 401 token gate) means the
+     * network works, any failure gets a dialog + deep link to the app's settings.
+     */
+    private void ensureNetworkAccess() {
+        String base = sp.getString("remoteEndpoint", "");
+        if (base == null || base.trim().isEmpty()) {
+            base = "https://giga-ki04-11436.sandstorm.cvis.uni-due.de";
+        }
+        base = base.trim();
+        while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+        final String url = base + "/";
+        new Thread(() -> {
+            try {
+                okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
+                        .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+                        .build();
+                try (okhttp3.Response r = client.newCall(
+                        new okhttp3.Request.Builder().url(url).head().build()).execute()) {
+                    return; // any HTTP response = network works
+                }
+            } catch (final Exception e) {
+                Log.w(TAG, "network probe failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                runOnUiThread(() -> new AlertDialog.Builder(this)
+                        .setTitle("Network check failed")
+                        .setMessage("Remote ASR couldn't reach " + url + " ("
+                                + e.getClass().getSimpleName() + "). On Android 16, per-app "
+                                + "network access can be disabled by the system and must be "
+                                + "enabled in the app's settings. Open the app's settings?")
+                        .setPositiveButton("Open settings", (d, w) -> {
+                            try {
+                                Intent i = new Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS);
+                                i.setData(Uri.parse("package:" + getPackageName()));
+                                startActivity(i);
+                            } catch (Exception ex) {
+                                Log.w(TAG, "cannot open app settings: " + ex.getMessage());
+                            }
+                        })
+                        .setNegativeButton("Later", null)
+                        .show());
+            }
+        }).start();
     }
 
     private void checkPermissions() {
