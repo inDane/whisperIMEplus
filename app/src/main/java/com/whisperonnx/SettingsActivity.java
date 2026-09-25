@@ -12,6 +12,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.CheckBox;
+import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.Spinner;
 import android.widget.Toast;
@@ -213,8 +214,67 @@ public class SettingsActivity extends AppCompatActivity {
             }
         });
 
+        setupRemoteSettings();
+
         checkPermissions();
 
+    }
+
+    private void setupRemoteSettings() {
+        Spinner spnrAsrMode = findViewById(R.id.spnrAsrMode);
+        String[] modes = {getString(R.string.asr_mode_local), getString(R.string.asr_mode_remote)};
+        spnrAsrMode.setAdapter(new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modes));
+        spnrAsrMode.setSelection(sp.getBoolean("remoteMode", false) ? 1 : 0);
+        spnrAsrMode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                SharedPreferences.Editor editor = sp.edit();
+                editor.putBoolean("remoteMode", i == 1);
+                editor.apply();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> adapterView) {
+            }
+        });
+
+        EditText editRemoteEndpoint = findViewById(R.id.editRemoteEndpoint);
+        EditText editRemoteToken = findViewById(R.id.editRemoteToken);
+        EditText editRemoteModel = findViewById(R.id.editRemoteModel);
+        CheckBox modeRemoteCleanup = findViewById(R.id.mode_remote_cleanup);
+        EditText editCleanupEndpoint = findViewById(R.id.editCleanupEndpoint);
+        EditText editCleanupToken = findViewById(R.id.editCleanupToken);
+        EditText editCleanupTerms = findViewById(R.id.editCleanupTerms);
+
+        editRemoteEndpoint.setText(sp.getString("remoteEndpoint", ""));
+        editRemoteToken.setText(sp.getString("remoteToken", ""));
+        editRemoteModel.setText(sp.getString("remoteModel", ""));
+        modeRemoteCleanup.setChecked(sp.getBoolean("remoteCleanup", false));
+        editCleanupEndpoint.setText(sp.getString("cleanupEndpoint", ""));
+        editCleanupToken.setText(sp.getString("cleanupToken", ""));
+        editCleanupTerms.setText(sp.getString("cleanupTerms", ""));
+
+        editRemoteEndpoint.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) sp.edit().putString("remoteEndpoint", editRemoteEndpoint.getText().toString().trim()).apply();
+        });
+        editRemoteToken.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) sp.edit().putString("remoteToken", editRemoteToken.getText().toString().trim()).apply();
+        });
+        editRemoteModel.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) sp.edit().putString("remoteModel", editRemoteModel.getText().toString().trim()).apply();
+        });
+        modeRemoteCleanup.setOnCheckedChangeListener((compoundButton, isChecked) -> {
+            sp.edit().putBoolean("remoteCleanup", isChecked).apply();
+        });
+        editCleanupEndpoint.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) sp.edit().putString("cleanupEndpoint", editCleanupEndpoint.getText().toString().trim()).apply();
+        });
+        editCleanupToken.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) sp.edit().putString("cleanupToken", editCleanupToken.getText().toString().trim()).apply();
+        });
+        editCleanupTerms.setOnFocusChangeListener((v, hasFocus) -> {
+            if (!hasFocus) sp.edit().putString("cleanupTerms", editCleanupTerms.getText().toString().trim()).apply();
+        });
     }
 
     private void checkPermissions() {

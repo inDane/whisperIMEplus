@@ -279,6 +279,9 @@ public class MainActivity extends AppCompatActivity {
                 if (message.equals(Whisper.MSG_PROCESSING)) {
                     runOnUiThread(() -> tvStatus.setText(getString(R.string.processing)));
                     startTime = System.currentTimeMillis();
+                } else {
+                    // surface remote ASR progress / errors (local mode only sends MSG_PROCESSING/DONE)
+                    runOnUiThread(() -> tvStatus.setText(message));
                 }
             }
 

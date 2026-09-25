@@ -336,6 +336,12 @@ public class WhisperInputMethodService extends InputMethodService {
         mWhisper.setListener(new Whisper.WhisperListener() {
             @Override
             public void onUpdateReceived(String message) {
+                if (message != null && !message.equals(Whisper.MSG_PROCESSING) && !message.equals(Whisper.MSG_PROCESSING_DONE)) {
+                    handler.post(() -> {
+                        tvStatus.setText(message);
+                        tvStatus.setVisibility(View.VISIBLE);
+                    });
+                }
             }
 
             @Override

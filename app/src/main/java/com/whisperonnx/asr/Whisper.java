@@ -40,11 +40,17 @@ public class Whisper {
     private Recognizer recognizer = null;
     private Context mContext;
     private long startTime;
+    private android.content.SharedPreferences sp;
+    private boolean remoteMode = false;
 
     public Whisper(Context context) {
         mContext = context;
 
-        //check if model is installed
+        sp = androidx.preference.PreferenceManager.getDefaultSharedPreferences(mContext);
+        remoteMode = sp.getBoolean("remoteMode", false);
+        Log.i(TAG, "Whisper created: remoteMode=" + remoteMode);
+
+        //check if model is installed (local mode only)
         File sdcardDataFolder = mContext.getExternalFilesDir(null);
 
         if (sdcardDataFolder != null && !sdcardDataFolder.exists() && !sdcardDataFolder.mkdirs()) {
@@ -52,21 +58,26 @@ public class Whisper {
             return;
         }
 
-        File[] files = sdcardDataFolder.listFiles();
-
-        int fileCount = 0;
-        for (File file : files) {
-            if (file.isFile()) {
-                fileCount++;
-            }
-        }
-        if (fileCount != 6) { //install model
-            Intent intent = new Intent(mContext, SetupActivity.class);
-            intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
-            mContext.startActivity(intent);
-        } else { // Start thread for RecordBuffer transcription
+        if (remoteMode) { // remote ASR: no local model, no setup gate
             Thread threadProcessRecordBuffer = new Thread(this::processRecordBufferLoop);
             threadProcessRecordBuffer.start();
+        } else {
+            File[] files = sdcardDataFolder.listFiles();
+
+            int fileCount = 0;
+            for (File file : files) {
+                if (file.isFile()) {
+                    fileCount++;
+                }
+            }
+            if (fileCount != 6) { //install model
+                Intent intent = new Intent(mContext, SetupActivity.class);
+                intent.addFlags(FLAG_ACTIVITY_NEW_TASK);
+                mContext.startActivity(intent);
+            } else { // Start thread for RecordBuffer transcription
+                Thread threadProcessRecordBuffer = new Thread(this::processRecordBufferLoop);
+                threadProcessRecordBuffer.start();
+            }
         }
 
     }
@@ -76,6 +87,10 @@ public class Whisper {
     }
 
     public void loadModel() {
+        if (remoteMode) {
+            Log.d(TAG, "Remote mode: no local model to load");
+            return;
+        }
         recognizer = new Recognizer(mContext, false, new NeuralNetworkApi.InitListener() {
             @Override
             public void onInitializationFinished() {
@@ -165,10 +180,16 @@ public class Whisper {
 
     private void processRecordBuffer() {
         try {
+            // read live: switching the engine in Settings takes effect immediately
+            boolean remote = sp.getBoolean("remoteMode", false);
             if (RecordBuffer.getOutputBuffer() != null) {
                 startTime = System.currentTimeMillis();
                 sendUpdate(MSG_PROCESSING);
-                recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
+                if (remote) {
+                    processRemote();
+                } else {
+                    recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
+                }
             } else {
                 sendUpdate("Engine not initialized or file path not set");
             }
@@ -178,6 +199,40 @@ public class Whisper {
         } finally {
             mInProgress.set(false);
         }
+    }
+
+    /** Remote ASR: raw PCM16 → WAV → POST /v1/audio/transcriptions (+ optional LLM cleanup). Runs on the worker thread. */
+    private void processRemote() {
+        byte[] pcm = RecordBuffer.getOutputBuffer();
+        Log.i(TAG, "processRemote: " + pcm.length + " bytes, endpoint=" + sp.getString("remoteEndpoint", "")
+                + ", token=" + (sp.getString("remoteToken", "") == null || sp.getString("remoteToken", "").isEmpty() ? "<empty>" : "<set>")
+                + ", model=" + sp.getString("remoteModel", ""));
+        sendUpdate("Remote: uploading " + (pcm.length / 1024) + " KB…");
+        new RemoteAsrBackend().transcribe(
+                pcm,
+                mLangCode,
+                sp.getString("remoteEndpoint", ""),
+                sp.getString("remoteToken", ""),
+                sp.getString("remoteModel", ""),
+                sp.getBoolean("remoteCleanup", false),
+                sp.getString("cleanupEndpoint", ""),
+                sp.getString("cleanupToken", ""),
+                sp.getString("cleanupTerms", ""),
+                new RemoteAsrBackend.RemoteListener() {
+                    @Override
+                    public void onResult(String text, String languageCode) {
+                        long timeTaken = System.currentTimeMillis() - startTime;
+                        Log.d(TAG, "Time Taken for remote transcription: " + timeTaken + "ms");
+                        sendResult(new WhisperResult(text, languageCode, mAction));
+                        sendUpdate(MSG_PROCESSING_DONE);
+                    }
+
+                    @Override
+                    public void onError(String message) {
+                        Log.e(TAG, "Remote ASR error: " + message);
+                        sendUpdate(message);
+                    }
+                });
     }
 
     private void sendUpdate(String message) {

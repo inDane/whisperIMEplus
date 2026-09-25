@@ -42,5 +42,16 @@
     <string name="lang2">Language 2</string>
     <string name="setting_bluetooth">Use Bluetooth devices</string>
     <string name="stop_button">Stop recording</string>
+    <string name="settings_remote_asr">Remote ASR</string>
+    <string name="setting_asr_mode">ASR engine:</string>
+    <string name="setting_remote_endpoint">ASR endpoint (base URL):</string>
+    <string name="setting_remote_token">ASR API key:</string>
+    <string name="setting_remote_model">ASR model name:</string>
+    <string name="setting_remote_cleanup">LLM cleanup pass:</string>
+    <string name="setting_cleanup_endpoint">Cleanup endpoint (/v1/chat/completions):</string>
+    <string name="setting_cleanup_token">Cleanup API key:</string>
+    <string name="setting_cleanup_terms">Known terms (optional):</string>
+    <string name="asr_mode_local">on-device (local Whisper)</string>
+    <string name="asr_mode_remote">remote server</string>
 
 </resources>
