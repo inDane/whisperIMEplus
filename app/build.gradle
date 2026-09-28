@@ -60,6 +60,9 @@ dependencies {
     implementation 'androidx.constraintlayout:constraintlayout:2.2.0'
     implementation 'androidx.preference:preference:1.2.1'
 
+    // Remote ASR / LLM cleanup (OkHttp + JSON parsing)
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+
     implementation 'com.google.guava:guava:31.1-android'
     implementation 'com.github.gkonovalov.android-vad:webrtc:2.0.10'
     implementation 'com.github.houbb:opencc4j:1.8.1'
