@@ -264,7 +264,7 @@ public class SettingsActivity extends AppCompatActivity {
         editRemoteToken.setText(sp.getString("remoteToken", ""));
         editRemoteModel.setText(sp.getString("remoteModel", ""));
 
-        findViewById(R.id.btnTestEndpoint).setOnClickListener(v -> testEndpoint(
+        findViewById(R.id.btnVerifyEndpoint).setOnClickListener(v -> testEndpoint(
                 editRemoteEndpoint.getText().toString().trim(),
                 editRemoteToken.getText().toString().trim()));
         modeRemoteCleanup.setChecked(sp.getBoolean("remoteCleanup", false));
@@ -365,7 +365,7 @@ public class SettingsActivity extends AppCompatActivity {
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
         final String url = base + "/v1/models";
         final AlertDialog testing = new AlertDialog.Builder(this)
-                .setTitle("Testing…")
+                .setTitle("Verifying…")
                 .setMessage("Contacting " + url)
                 .setCancelable(false).show();
         new Thread(() -> {
@@ -411,7 +411,7 @@ public class SettingsActivity extends AppCompatActivity {
             runOnUiThread(() -> {
                 testing.dismiss();
                 new AlertDialog.Builder(this)
-                        .setTitle("Connection test")
+                        .setTitle("Verification")
                         .setMessage(result[0])
                         .setPositiveButton("OK", null).show();
             });
