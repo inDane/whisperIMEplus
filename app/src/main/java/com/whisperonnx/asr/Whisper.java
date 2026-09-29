@@ -260,8 +260,11 @@ public class Whisper {
                 } else {
                     // Local mode: lazily load the engine if the instance started in remote
                     // mode (loadModel() is idempotent and reads the live setting).
+                    // A sensitive field forced local processing while the live setting is still
+                    // remote -> bypass the remoteMode gate exactly like the fallback does,
+                    // otherwise the engine would never start and dictation dead-ends.
                     if (recognizer == null) {
-                        loadModel();
+                        loadModel(sensitive);
                     }
                     if (recognizer != null && (engineReady || waitForEngine(15000))) {
                         recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
