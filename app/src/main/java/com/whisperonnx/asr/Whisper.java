@@ -88,8 +88,11 @@ public class Whisper {
         this.mUpdateListener = listener;
     }
 
-    public void loadModel() {
-        if (remoteMode) {
+    public synchronized void loadModel() {
+        if (recognizer != null) {
+            return; // already loaded (idempotent — safe to call on switch)
+        }
+        if (sp.getBoolean("remoteMode", false)) {
             Log.d(TAG, "Remote mode: no local model to load");
             return;
         }
@@ -189,10 +192,17 @@ public class Whisper {
                 sendUpdate(MSG_PROCESSING);
                 if (remote) {
                     processRemote();
-                } else if (recognizer != null) {
-                    recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
                 } else {
-                    sendUpdate("Engine not initialized");
+                    // Local mode: lazily load the engine if the instance started in remote
+                    // mode (loadModel() is idempotent and reads the live setting).
+                    if (recognizer == null) {
+                        loadModel();
+                    }
+                    if (recognizer != null) {
+                        recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
+                    } else {
+                        sendUpdate("Engine not initialized");
+                    }
                 }
             } else {
                 sendUpdate("Engine not initialized or file path not set");
