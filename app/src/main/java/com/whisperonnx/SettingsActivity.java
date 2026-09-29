@@ -263,6 +263,10 @@ public class SettingsActivity extends AppCompatActivity {
         editRemoteEndpoint.setText(sp.getString("remoteEndpoint", ""));
         editRemoteToken.setText(sp.getString("remoteToken", ""));
         editRemoteModel.setText(sp.getString("remoteModel", ""));
+
+        findViewById(R.id.btnTestEndpoint).setOnClickListener(v -> testEndpoint(
+                editRemoteEndpoint.getText().toString().trim(),
+                editRemoteToken.getText().toString().trim()));
         modeRemoteCleanup.setChecked(sp.getBoolean("remoteCleanup", false));
         View cleanupFields = findViewById(R.id.layout_cleanup_fields);
         cleanupFields.setVisibility(sp.getBoolean("remoteCleanup", false) ? View.VISIBLE : View.GONE);
@@ -340,6 +344,77 @@ public class SettingsActivity extends AppCompatActivity {
                         .setNegativeButton("Later", null)
                         .show());
             }
+        }).start();
+    }
+
+    /**
+     * Manual connectivity probe: runs the SAME OkHttp path the real transcription uses, so a
+     * failure here reproduces a failure there. Reports the precise outcome so the user can read
+     * back the failure class (DNS blackhole = per-app network, TLS = cert, timeout = firewall,
+     * HTTP 401 = auth).
+     */
+    private void testEndpoint(String base, String token) {
+        if (base == null || base.isEmpty()) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Test")
+                    .setMessage("No endpoint set.")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
+        base = base.trim();
+        while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+        final String url = base + "/v1/models";
+        final AlertDialog testing = new AlertDialog.Builder(this)
+                .setTitle("Testing…")
+                .setMessage("Contacting " + url)
+                .setCancelable(false).show();
+        new Thread(() -> {
+            String[] result = new String[1];
+            try {
+                try (okhttp3.Response r = PROBE_CLIENT.newCall(
+                        new okhttp3.Request.Builder()
+                                .url(url)
+                                .get()
+                                .header("Authorization", "Bearer " + token)
+                                .build()).execute()) {
+                    String body = r.body() != null ? r.body().string() : "";
+                    if (r.isSuccessful()) {
+                        result[0] = "OK - HTTP " + r.code()
+                                + "\n\nServer answered the /v1/models request.\nRemote ASR should work.";
+                    } else if (r.code() == 401 || r.code() == 403) {
+                        result[0] = "HTTP " + r.code() + " - reachable, but auth rejected.\n\n"
+                                + "The endpoint is reachable (good: network is fine), but the API key/token was rejected.";
+                    } else {
+                        result[0] = "HTTP " + r.code() + "\n\nReachable but unexpected status.\nFirst 200 chars: "
+                                + body.substring(0, Math.min(body.length(), 200));
+                    }
+                }
+            } catch (Exception e) {
+                String cls = e.getClass().getSimpleName();
+                String msg = e.getMessage() == null ? "" : e.getMessage();
+                String hint;
+                if (cls.equals("UnknownHostException")) {
+                    hint = "\n\nThis usually means DNS for the host failed. On Android 16 a per-app "
+                            + "network restriction (or a disabled Wi-Fi/data) blackholes DNS. "
+                            + "Fennec/browser can still resolve, because that is per-app.";
+                } else if (cls.equals("SocketTimeoutException")) {
+                    hint = "\n\nConnection timed out - the host may be up but a firewall is "
+                            + "dropping the connection, or the route is blocked.";
+                } else if (cls.equals("SSLException") || cls.equals("CertificateException")) {
+                    hint = "\n\nTLS/certificate problem - the server's certificate may be "
+                            + "untrusted or the connection downgraded.";
+                } else {
+                    hint = "";
+                }
+                result[0] = "FAILED: " + cls + (msg.isEmpty() ? "" : " - " + msg) + hint;
+            }
+            runOnUiThread(() -> {
+                testing.dismiss();
+                new AlertDialog.Builder(this)
+                        .setTitle("Connection test")
+                        .setMessage(result[0])
+                        .setPositiveButton("OK", null).show();
+            });
         }).start();
     }
 

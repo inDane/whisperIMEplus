@@ -251,6 +251,13 @@
                     android:layout_weight="1"
                     android:inputType="textUri"
                     android:autofillHints="url" />
+
+                <Button
+                    android:id="@+id/btnTestEndpoint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Test"
+                    android:minWidth="56dp" />
             </LinearLayout>
 
             <LinearLayout
