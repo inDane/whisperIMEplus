@@ -13,6 +13,7 @@ import android.os.Bundle;
 import android.os.CountDownTimer;
 import android.speech.RecognizerIntent;
 import android.util.Log;
+import com.whisperonnx.BuildConfig;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
@@ -57,13 +58,14 @@ public class WhisperRecognizeActivity extends AppCompatActivity {
         sp = PreferenceManager.getDefaultSharedPreferences(this);
 
         String targetLang = getIntent().getStringExtra(RecognizerIntent.EXTRA_LANGUAGE);
-        Log.d("WhisperRecognizeActivity", "Incoming Intent Action: " + getIntent().getAction());
-        Log.d("WhisperRecognizeActivity", "Incoming Intent Flags: " + getIntent().getFlags());
-        Log.d("WhisperRecognizeActivity", "getCallingActivity: " + getCallingActivity());
-        Log.d("WhisperRecognizeActivity", "getCallingPackage: " + getCallingPackage());
-        if (getIntent().getExtras() != null) {
-            for (String key : getIntent().getExtras().keySet()) {
-                Log.d("WhisperRecognizeActivity", "Extra: " + key + " = " + getIntent().getExtras().get(key));
+        if (BuildConfig.DEBUG) {
+            // This activity is exported (RECOGNIZE_SPEECH): never log caller details / extras in release
+            Log.d("WhisperRecognizeActivity", "Incoming Intent Action: " + getIntent().getAction());
+            Log.d("WhisperRecognizeActivity", "getCallingPackage: " + getCallingPackage());
+            if (getIntent().getExtras() != null) {
+                for (String key : getIntent().getExtras().keySet()) {
+                    Log.d("WhisperRecognizeActivity", "Extra: " + key + " = " + getIntent().getExtras().get(key));
+                }
             }
         }
         String langCode = sp.getString("language", "auto");

@@ -2,3 +2,6 @@
 /app/build/
 /build/
 /.gradle/
+
+# Gradle/SDK local config (contains developer-specific paths)
+local.properties

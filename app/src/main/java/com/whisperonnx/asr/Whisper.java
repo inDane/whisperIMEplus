@@ -194,6 +194,18 @@ public class Whisper {
         this.mLangCode = language;
     }
 
+    /**
+     * Whether the current input field is sensitive (password/PIN/credit-card, or an
+     * incognito/privacy-flagged field). When set, the remote engine is not used for the next
+     * utterance even if remote mode is on - audio would otherwise be sent off-device for a
+     * field that must stay local.
+     */
+    private volatile boolean fieldSensitive = false;
+
+    public void setFieldSensitive(boolean sensitive) {
+        this.fieldSensitive = sensitive;
+    }
+
     public void start() {
         if (!mInProgress.compareAndSet(false, true)) {
             Log.d(TAG, "Execution is already in progress...");
@@ -236,7 +248,10 @@ public class Whisper {
     private void processRecordBuffer() {
         try {
             // read live: switching the engine in Settings takes effect immediately
-            boolean remote = sp.getBoolean("remoteMode", false);
+            // Live remote-mode read; sensitive fields (passwords, PIN, incognito) force local
+            boolean sensitive = fieldSensitive;
+            fieldSensitive = false; // consume for this utterance
+            boolean remote = sp.getBoolean("remoteMode", false) && !sensitive;
             if (RecordBuffer.getOutputBuffer() != null) {
                 startTime = System.currentTimeMillis();
                 sendUpdate(MSG_PROCESSING);
