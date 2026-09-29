@@ -363,6 +363,13 @@ public class SettingsActivity extends AppCompatActivity {
         }
         base = base.trim();
         while (base.endsWith("/")) base = base.substring(0, base.length() - 1);
+        if (!base.startsWith("https://")) {
+            new AlertDialog.Builder(this)
+                    .setTitle("Verification")
+                    .setMessage("Endpoint must use https:// (plaintext HTTP is not allowed).")
+                    .setPositiveButton("OK", null).show();
+            return;
+        }
         final String url = base + "/v1/models";
         final AlertDialog testing = new AlertDialog.Builder(this)
                 .setTitle("Verifying…")
@@ -423,9 +430,6 @@ public class SettingsActivity extends AppCompatActivity {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             perms.add(Manifest.permission.RECORD_AUDIO);
             Toast.makeText(this, getString(R.string.need_record_audio_permission), Toast.LENGTH_SHORT).show();
-        }
-        if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) && (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)){
-            perms.add(Manifest.permission.POST_NOTIFICATIONS);
         }
         if (!perms.isEmpty()) {
             requestPermissions(perms.toArray(new String[] {}), 0);

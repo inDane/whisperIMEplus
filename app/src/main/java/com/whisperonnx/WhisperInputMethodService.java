@@ -58,6 +58,8 @@ public class WhisperInputMethodService extends InputMethodService {
     private static boolean translate = false;
     private android.view.inputmethod.InputConnection recordingInputConnection = null;
     private String recordingFieldId = null;
+    private boolean fieldSensitivePending = false;
+    private boolean recordingFieldSensitive = false;
     private boolean modeAuto = false;
     private RelativeLayout layoutButtons;
 
@@ -79,7 +81,10 @@ public class WhisperInputMethodService extends InputMethodService {
     @Override
     public void onStartInput(EditorInfo attribute, boolean restarting) {
         if (attribute.inputType ==  EditorInfo.TYPE_NULL) {
-            Log.d(TAG, "Cancelling: onStartInput: inputType=" + attribute.inputType + ", package=" + attribute.packageName + ", fieldId=" + attribute.fieldId);
+            // Release builds must not log which app/field the keyboard is used in
+            Log.d(TAG, com.whisperonnx.BuildConfig.DEBUG
+                    ? "Cancelling: onStartInput: inputType=" + attribute.inputType + ", package=" + attribute.packageName + ", fieldId=" + attribute.fieldId
+                    : "Cancelling: onStartInput (empty input field)" );
             deinitModel();
             if (mRecorder != null && mRecorder.isInProgress()) {
                 mRecorder.stop();
@@ -327,7 +332,7 @@ public class WhisperInputMethodService extends InputMethodService {
     }
 
     private void startRecording() {
-        applyFieldSensitivity();
+        markFieldSensitivity();
         captureRecordingField();
         if (modeAuto) mRecorder.initVad();
         mRecorder.start();
@@ -337,21 +342,30 @@ public class WhisperInputMethodService extends InputMethodService {
      * Sensitive fields (password, PIN, credit card, incognito/privacy-flagged) force the
      * on-device engine even when remote mode is on - the audio of a password field must not
      * leave the device.
+     *
+     * In auto mode the Whisper instance is created AFTER startRecording() (Android calls
+     * onCreateInputView() before onStartInputView(), where initModel() runs), so the flag is
+     * stored here and applied to the instance in initModel() - otherwise auto mode would
+     * silently send password-field audio to the remote server.
      */
-    private void applyFieldSensitivity() {
-        if (mWhisper == null) return;
+    private void markFieldSensitivity() {
         android.view.inputmethod.EditorInfo ei = getCurrentInputEditorInfo();
-        if (ei == null) return;
-        int t = ei.inputType;
-        int classMask = android.text.InputType.TYPE_MASK_CLASS;
-        int varMask = android.text.InputType.TYPE_MASK_VARIATION;
-        boolean sensitive
+        boolean sensitive = false;
+        if (ei != null) {
+            int t = ei.inputType;
+            int classMask = android.text.InputType.TYPE_MASK_CLASS;
+            int varMask = android.text.InputType.TYPE_MASK_VARIATION;
+            sensitive
                 = (t & classMask) == android.text.InputType.TYPE_CLASS_NUMBER       // PIN / card number
                 || (t & varMask) == android.text.InputType.TYPE_TEXT_VARIATION_PASSWORD
                 || (t & varMask) == android.text.InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
                 || (t & varMask) == android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
                 || (ei.imeOptions & android.view.inputmethod.EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING) != 0; // incognito
-        mWhisper.setFieldSensitive(sensitive);
+        }
+        fieldSensitivePending = sensitive;
+        if (mWhisper != null) {
+            mWhisper.setFieldSensitive(sensitive);
+        }
         if (sensitive && sp.getBoolean("remoteMode", false)) {
             handler.post(() -> {
                 tvStatus.setText(R.string.sensitive_field_local);
@@ -365,6 +379,7 @@ public class WhisperInputMethodService extends InputMethodService {
         recordingInputConnection = getCurrentInputConnection();
         android.view.inputmethod.EditorInfo ei = getCurrentInputEditorInfo();
         recordingFieldId = ei != null ? ei.packageName + "/" + ei.fieldId + "/" + ei.inputType : null;
+        recordingFieldSensitive = fieldSensitivePending;
     }
 
     private boolean sameFieldAsRecording() {
@@ -378,6 +393,10 @@ public class WhisperInputMethodService extends InputMethodService {
     private void initModel() {
 
         mWhisper = new Whisper(this);
+        // Auto mode started recording before this instance existed (onCreateInputView runs
+        // before onStartInputView): carry the field's sensitivity over, so a password field
+        // is never dictated to the remote server even though the check ran pre-creation.
+        mWhisper.setFieldSensitive(fieldSensitivePending);
         mWhisper.loadModel();
         mWhisper.setListener(new Whisper.WhisperListener() {
             @Override
@@ -407,12 +426,24 @@ public class WhisperInputMethodService extends InputMethodService {
                 if (result.trim().length() > 0) {
                     if (sameFieldAsRecording()) {
                         commitSuccess = getCurrentInputConnection().commitText(result.trim() + " ",1);
+                    } else if (recordingFieldSensitive) {
+                        // Sensitive field: the user moved away mid-processing. Discard entirely -
+                        // a dictated password must not sit in the clipboard or its history.
+                        handler.post(() -> {
+                            tvStatus.setText(R.string.sensitive_field_discarded);
+                            tvStatus.setVisibility(View.VISIBLE);
+                        });
                     } else {
                         // Field changed while (remote) processing ran: never inject the text into
                         // the new field - copy to clipboard instead and tell the user.
-                        android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-                        if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("Whisper+", result.trim()));
-                        Toast.makeText(WhisperInputMethodService.this, R.string.result_copied_field_changed, Toast.LENGTH_LONG).show();
+                        // (onResultReceived runs on a background thread; clipboard + Toast
+                        // must be posted to the main thread or Android throws.)
+                        final String finalResult = result.trim();
+                        handler.post(() -> {
+                            android.content.ClipboardManager cm = (android.content.ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
+                            if (cm != null) cm.setPrimaryClip(android.content.ClipData.newPlainText("Whisper+", finalResult));
+                            Toast.makeText(WhisperInputMethodService.this, R.string.result_copied_field_changed, Toast.LENGTH_LONG).show();
+                        });
                     }
                 }
                 if (modeAuto && commitSuccess) handler.postDelayed(() -> switchToPreviousInputMethod(), 100);  //slightly delayed, otherwise some apps, e.g. WhatsApp, do not accept the committed text (commitText on inactive InputConnection)

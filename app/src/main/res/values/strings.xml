@@ -55,5 +55,6 @@
     <string name="asr_mode_remote">remote server</string>
     <string name="sensitive_field_local">Password field — using on-device engine</string>
     <string name="result_copied_field_changed">Field changed while transcribing — result copied to clipboard</string>
+    <string name="sensitive_field_discarded">Password field — result discarded</string>
 
 </resources>

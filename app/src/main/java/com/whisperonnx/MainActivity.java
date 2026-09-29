@@ -326,9 +326,6 @@ public class MainActivity extends AppCompatActivity {
             perms.add(Manifest.permission.RECORD_AUDIO);
             Toast.makeText(this, getString(R.string.need_record_audio_permission), Toast.LENGTH_SHORT).show();
         }
-        if ((Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) && (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED)){
-            perms.add(Manifest.permission.POST_NOTIFICATIONS);
-        }
         if (sp.getBoolean("bluetooth", false)
                 && ContextCompat.checkSelfPermission(this, Manifest.permission.BLUETOOTH_CONNECT) != PackageManager.PERMISSION_GRANTED
                 && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
