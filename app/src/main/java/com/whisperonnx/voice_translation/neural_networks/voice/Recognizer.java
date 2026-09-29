@@ -39,6 +39,7 @@ import ai.onnxruntime.extensions.OrtxPackage;
 
 
 public class Recognizer extends NeuralNetworkApi {
+    private static final String TAG = "Recognizer";
     private static final int MAX_TOKENS_PER_SECOND = 30;
     private static final int MAX_TOKENS = 445;   //if we generate more than this quantity of tokens for a transcription we have an error
     public static final String UNDEFINED_TEXT = "[(und)]";
@@ -238,7 +239,7 @@ public class Recognizer extends NeuralNetworkApi {
 
                     initListener.onInitializationFinished();
                 } catch (OrtException e) {
-                    e.printStackTrace();
+                    Log.e(TAG, "Model integrity check failed", e);
                     initListener.onError(new int[]{ErrorCodes.ERROR_LOADING_MODEL},0);
                 }
             }
@@ -565,7 +566,7 @@ public class Recognizer extends NeuralNetworkApi {
                     Log.i("performance", "SPEECH RECOGNITION DONE IN: " + (SystemClock.elapsedRealtime() - startTimeInMs) + "ms");
 
                 } catch (OrtException e) {
-                    e.printStackTrace();
+                    Log.e(TAG, "Model inference failed", e);
                     notifyError(new int[]{ErrorCodes.ERROR_EXECUTING_MODEL}, 0);
                 }
             }

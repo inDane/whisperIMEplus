@@ -18,6 +18,7 @@ import android.speech.RecognitionService;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.util.Log;
+import com.whisperonnx.BuildConfig;
 import android.widget.Toast;
 
 import androidx.core.content.ContextCompat;
@@ -34,7 +35,7 @@ public class WhisperRecognitionService extends RecognitionService {
     private static final String TAG = "WhisperRecognitionService";
     private Recorder mRecorder = null;
     private Whisper mWhisper = null;
-    private boolean recognitionCancelled = false;
+    private volatile boolean recognitionCancelled = false;
     private SharedPreferences sp = null;
 
     @Override
@@ -142,7 +143,7 @@ public class WhisperRecognitionService extends RecognitionService {
             @Override
             public void onResultReceived(WhisperResult whisperResult) {
                 if (whisperResult.getResult().trim().length() > 0){
-                    Log.d(TAG, whisperResult.getResult().trim());
+                    if (BuildConfig.DEBUG) Log.d(TAG, whisperResult.getResult().trim());
                     try {
                         callback.endOfSpeech();
                         deinitModel();
@@ -199,6 +200,7 @@ public class WhisperRecognitionService extends RecognitionService {
     @Override
     public void onDestroy (){
         deinitModel();
+        super.onDestroy();
     }
     private void deinitModel() {
         if (mWhisper != null) {

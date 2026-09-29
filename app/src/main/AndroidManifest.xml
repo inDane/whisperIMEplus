@@ -39,18 +39,13 @@
 
         <activity android:name=".SetupActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
 
         <activity
             android:name=".WhisperRecognizeActivity"
             android:exported="true"
             android:clearTaskOnLaunch="true"
             android:launchMode="standard"
-            android:visibleToInstantApps="true"
             android:theme="@style/Theme.WhisperFloating"
             android:configChanges="orientation|screenLayout|screenSize|keyboardHidden|keyboard|uiMode|density">
             <intent-filter>
@@ -93,11 +88,7 @@
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|uiMode"
             android:theme="@style/Theme.Whisper.ActionBar"
             android:label="@string/settings"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
 
     </application>
 </manifest>

@@ -1,6 +1,7 @@
 package com.whisperonnx.asr;
 
 import android.util.Log;
+import com.whisperonnx.BuildConfig;
 
 import org.json.JSONObject;
 
@@ -45,6 +46,14 @@ public class RemoteAsrBackend {
                 .build();
     }
 
+    /** Sanitized user-facing error: generic reason only, no server/exception details (rendered in the IME view). */
+    private static String safeError(Exception e) {
+        if (e instanceof java.net.UnknownHostException) return "Server not reachable — check the endpoint and your connection";
+        if (e instanceof java.net.SocketTimeoutException) return "Server timed out — try again";
+        if (e instanceof javax.net.ssl.SSLException) return "TLS handshake failed — check the endpoint certificate";
+        return "Remote ASR failed";
+    }
+
     /** Transcribe raw 16 kHz mono PCM16 bytes via the batch endpoint (synchronous; call off main thread). */
     public void transcribe(byte[] pcm16, String language, String endpoint, String token, String model,
                            boolean cleanup, String cleanupEndpoint, String cleanupToken, String cleanupTerms,
@@ -59,9 +68,12 @@ public class RemoteAsrBackend {
             if (base.endsWith("/")) base = base.substring(0, base.length() - 1);
             String m = (model == null || model.trim().isEmpty()) ? DEFAULT_MODEL : model.trim();
 
+            if (!base.startsWith("https://")) {
+                listener.onError("Remote ASR endpoint must use https:// — plaintext HTTP is not allowed");
+                return;
+            }
             byte[] wav = pcm16ToWav(pcm16);
-            Log.i(TAG, "transcribe: POST " + base + "/v1/audio/transcriptions, model=" + m
-                    + ", lang=" + language + ", wav=" + wav.length + " bytes, cleanup=" + cleanup);
+            Log.i(TAG, "transcribe: wav=" + wav.length + " bytes, cleanup=" + cleanup);
 
             MultipartBody.Builder mb = new MultipartBody.Builder().setType(MultipartBody.FORM)
                     .addFormDataPart("file", "audio.wav", RequestBody.create(wav, WAV_MEDIA))
@@ -80,9 +92,9 @@ public class RemoteAsrBackend {
             try (Response response = http.newCall(request).execute()) {
                 long t1 = System.currentTimeMillis();
                 String body = response.body() != null ? response.body().string() : "";
-                Log.i(TAG, "transcribe: HTTP " + response.code() + " in " + (t1 - t0) + " ms: " + body.substring(0, Math.min(body.length(), 200)));
+                Log.i(TAG, "transcribe: HTTP " + response.code() + " in " + (t1 - t0) + " ms, " + body.length() + " bytes");
                 if (!response.isSuccessful()) {
-                    Log.e(TAG, "ASR HTTP " + response.code() + ": " + body);
+                    Log.e(TAG, "ASR HTTP " + response.code());
                     listener.onError("ASR server error " + response.code());
                     return;
                 }
@@ -98,12 +110,12 @@ public class RemoteAsrBackend {
                 if (cleanup) {
                     text = cleanUp(text, cleanupEndpoint, cleanupToken, cleanupTerms, t1, listener);
                 }
-                Log.d(TAG, "Remote transcription (" + (System.currentTimeMillis() - t0) + " ms total): " + text);
+                Log.d(TAG, "Remote transcription done in " + (System.currentTimeMillis() - t0) + " ms, " + text.length() + " chars");
                 listener.onResult(text, lang);
             }
         } catch (Exception e) {
-            Log.e(TAG, "Remote transcription failed: " + e.getClass().getName() + " after " + (System.currentTimeMillis() - t0) + " ms", e);
-            listener.onError("Remote ASR failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+            Log.e(TAG, "Remote transcription failed after " + (System.currentTimeMillis() - t0) + " ms", e);
+            listener.onError(safeError(e));
         }
     }
 
@@ -117,6 +129,11 @@ public class RemoteAsrBackend {
                 return text;
             }
             String url = cleanupEndpoint.trim();
+            if (!url.startsWith("https://")) {
+                Log.w(TAG, "Cleanup endpoint is not https; skipping");
+                listener.onStatus("Cleanup skipped (endpoint must use https)");
+                return text;
+            }
             if (!url.contains("/v1/chat/completions")) {
                 while (url.endsWith("/")) url = url.substring(0, url.length() - 1);
                 url = url + "/v1/chat/completions";
@@ -156,7 +173,7 @@ public class RemoteAsrBackend {
                     listener.onStatus("Cleanup empty, raw text kept");
                     return text;
                 }
-                Log.d(TAG, "Cleanup took " + ms + " ms: " + cleaned);
+                Log.d(TAG, "Cleanup took " + ms + " ms, " + cleaned.length() + " chars");
                 listener.onStatus("Cleanup done (" + ms + " ms)");
                 return cleaned;
             }

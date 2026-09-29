@@ -84,6 +84,13 @@ public class SetupActivity extends AppCompatActivity {
                     try (ZipInputStream zipInputStream = new ZipInputStream(src)) {
                         while ((zipEntry = zipInputStream.getNextEntry()) != null) {
                             File extractedFile = new File(targetDir ,zipEntry.getName());
+                            // Zip-slip guard: reject entries that resolve outside targetDir
+                            String extractedCanonical = extractedFile.getCanonicalPath();
+                            String targetDirCanonical = targetDir.getCanonicalPath();
+                            if (!extractedCanonical.equals(targetDirCanonical)
+                                    && !extractedCanonical.startsWith(targetDirCanonical + File.separator)) {
+                                throw new IOException("Zip entry outside target directory: " + zipEntry.getName());
+                            }
                             runOnUiThread(()->{
                                 extractedFileTV.setVisibility(View.VISIBLE);
                                 extractedFileTV.setText(extractedFile.getName());
@@ -102,10 +109,10 @@ public class SetupActivity extends AppCompatActivity {
                         });
                     }
                 } catch (IOException ioException) {
-                    ioException.printStackTrace();
+                    Log.e("SetupActivity", "zip extract failed", ioException);
                 }
             } catch (FileNotFoundException e) {
-                e.printStackTrace();
+                Log.e("SetupActivity", "zip not found", e);
             }
         });
         thread.start();

@@ -104,7 +104,7 @@ public class WhisperInputMethodService extends InputMethodService {
             editor.putInt("langSelected",1);
             editor.putString("language1",langCodeIME);
             editor.putString("language2","auto");
-            editor.commit();
+            editor.apply();
         }
 
         View view = getLayoutInflater().inflate(R.layout.voice_service, null);

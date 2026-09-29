@@ -5,6 +5,7 @@ import static android.content.Intent.FLAG_ACTIVITY_NEW_TASK;
 import android.content.Context;
 import android.content.Intent;
 import android.util.Log;
+import com.whisperonnx.BuildConfig;
 
 import com.whisperonnx.SetupActivity;
 import com.whisperonnx.voice_translation.neural_networks.NeuralNetworkApi;
@@ -63,6 +64,7 @@ public class Whisper {
             threadProcessRecordBuffer.start();
         } else {
             File[] files = sdcardDataFolder.listFiles();
+            if (files == null) files = new File[0];
 
             int fileCount = 0;
             for (File file : files) {
@@ -107,7 +109,7 @@ public class Whisper {
         recognizer.addCallback(new RecognizerListener() {
             @Override
             public void onSpeechRecognizedResult(String text, String languageCode, double confidenceScore, boolean isFinal) {
-                Log.d(TAG, languageCode + " " + text);
+                if (BuildConfig.DEBUG) Log.d(TAG, languageCode + " " + text);
                 WhisperResult whisperResult = new WhisperResult(text,languageCode, mAction);
 
                 sendResult(whisperResult);
@@ -187,15 +189,17 @@ public class Whisper {
                 sendUpdate(MSG_PROCESSING);
                 if (remote) {
                     processRemote();
-                } else {
+                } else if (recognizer != null) {
                     recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
+                } else {
+                    sendUpdate("Engine not initialized");
                 }
             } else {
                 sendUpdate("Engine not initialized or file path not set");
             }
         } catch (Exception e) {
             Log.e(TAG, "Error during transcription", e);
-            sendUpdate("Transcription failed: " + e.getMessage());
+            sendUpdate("Transcription failed");
         } finally {
             mInProgress.set(false);
         }
@@ -204,9 +208,7 @@ public class Whisper {
     /** Remote ASR: raw PCM16 → WAV → POST /v1/audio/transcriptions (+ optional LLM cleanup). Runs on the worker thread. */
     private void processRemote() {
         byte[] pcm = RecordBuffer.getOutputBuffer();
-        Log.i(TAG, "processRemote: " + pcm.length + " bytes, endpoint=" + sp.getString("remoteEndpoint", "")
-                + ", token=" + (sp.getString("remoteToken", "") == null || sp.getString("remoteToken", "").isEmpty() ? "<empty>" : "<set>")
-                + ", model=" + sp.getString("remoteModel", ""));
+        Log.i(TAG, "processRemote: " + pcm.length + " bytes");
         sendUpdate("Remote: uploading " + (pcm.length / 1024) + " KB…");
         new RemoteAsrBackend().transcribe(
                 pcm,

@@ -35,6 +35,11 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class SettingsActivity extends AppCompatActivity {
+
+    private static final okhttp3.OkHttpClient PROBE_CLIENT = new okhttp3.OkHttpClient.Builder()
+            .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+            .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
+            .build();
     private static final String TAG = "SettingsActivity";
 
     private SharedPreferences sp = null;
@@ -65,7 +70,7 @@ public class SettingsActivity extends AppCompatActivity {
             editor.putInt("langSelected",1);
             editor.putString("language1",langCodeIME);
             editor.putString("language2","auto");
-            editor.commit();
+            editor.apply();
         }
 
         ImageButton btnLang1 = findViewById(R.id.btnLang1);
@@ -228,9 +233,14 @@ public class SettingsActivity extends AppCompatActivity {
         String[] modes = {getString(R.string.asr_mode_local), getString(R.string.asr_mode_remote)};
         spnrAsrMode.setAdapter(new android.widget.ArrayAdapter<>(this, android.R.layout.simple_spinner_item, modes));
         spnrAsrMode.setSelection(sp.getBoolean("remoteMode", false) ? 1 : 0);
+        final boolean[] modeSelectionInitialized = {false};
         spnrAsrMode.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> adapterView, View view, int i, long l) {
+                if (!modeSelectionInitialized[0]) { // skip the programmatic setSelection callback
+                    modeSelectionInitialized[0] = true;
+                    return;
+                }
                 SharedPreferences.Editor editor = sp.edit();
                 editor.putBoolean("remoteMode", i == 1);
                 editor.apply();
@@ -306,16 +316,12 @@ public class SettingsActivity extends AppCompatActivity {
         final String url = base + "/";
         new Thread(() -> {
             try {
-                okhttp3.OkHttpClient client = new okhttp3.OkHttpClient.Builder()
-                        .connectTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
-                        .readTimeout(8, java.util.concurrent.TimeUnit.SECONDS)
-                        .build();
-                try (okhttp3.Response r = client.newCall(
+                try (okhttp3.Response r = PROBE_CLIENT.newCall(
                         new okhttp3.Request.Builder().url(url).head().build()).execute()) {
-                    return; // any HTTP response = network works
+                    // any HTTP response = network works
                 }
             } catch (final Exception e) {
-                Log.w(TAG, "network probe failed: " + e.getClass().getSimpleName() + ": " + e.getMessage());
+                Log.w(TAG, "network probe failed: " + e.getClass().getSimpleName());
                 runOnUiThread(() -> new AlertDialog.Builder(this)
                         .setTitle("Network check failed")
                         .setMessage("Remote ASR couldn't reach " + url + " ("
