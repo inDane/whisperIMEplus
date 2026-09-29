@@ -140,16 +140,20 @@ public class Whisper {
                 long timeTaken = System.currentTimeMillis() - startTime;
                 Log.d(TAG, "Time Taken for transcription: " + timeTaken + "ms");
                 sendUpdate(MSG_PROCESSING_DONE);
+                releaseAsyncLocal(); // N1: re-enable the mic button only now
             }
 
             @Override
             public void onError(int[] reasons, long value) {
                 Log.d(TAG, "ERROR during recognition");
+                releaseAsyncLocal(); // N1: MUST also reset on error, or the keyboard hangs
+                sendUpdate("Local transcription failed - try again");
             }
         });
     }
 
     public void unloadModel() {
+        releaseAsyncLocal();
         synchronized (this) {
             if (recognizer != null) {
                 recognizer.destroy();
@@ -201,6 +205,26 @@ public class Whisper {
      * field that must stay local.
      */
     private volatile boolean fieldSensitive = false;
+
+    // N1: local recognize() is async (its own thread) while processRecordBuffer() returns
+    // immediately. Keep mInProgress set until the result/error callback fires, so the mic
+    // button cannot start a second recording that would steal this result's field
+    // attribution. A safety timeout resets it in case a callback never arrives.
+    private volatile boolean asyncLocalPending = false;
+    private android.os.Handler localResetHandler = null;
+    private android.os.Message localResetToken = null;
+    private Runnable localResetRunnable = null;
+
+    private void releaseAsyncLocal() {
+        if (asyncLocalPending) {
+            asyncLocalPending = false;
+            if (localResetHandler != null) {
+                if (localResetRunnable != null) localResetHandler.removeCallbacks(localResetRunnable);
+                if (localResetToken != null) localResetHandler.removeCallbacksAndMessages(localResetToken);
+            }
+            mInProgress.set(false);
+        }
+    }
 
     public void setFieldSensitive(boolean sensitive) {
         this.fieldSensitive = sensitive;
@@ -268,6 +292,21 @@ public class Whisper {
                     }
                     if (recognizer != null && (engineReady || waitForEngine(15000))) {
                         recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
+                        // recognize() returns immediately (own thread): keep mInProgress set
+                        // until the result/error callback resets it, plus a safety timeout.
+                        asyncLocalPending = true;
+                        localResetHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+                        localResetToken = android.os.Message.obtain();
+                        localResetRunnable = () -> {
+                            if (asyncLocalPending) {
+                                asyncLocalPending = false;
+                                mInProgress.set(false);
+                                sendUpdate("Transcription timed out - try again");
+                            }
+                        };
+                        // postAtTime with a token: the timeout is cancellable in releaseAsyncLocal()
+                        localResetHandler.postAtTime(localResetRunnable, localResetToken, 60000);
+                        return; // finally must NOT clear mInProgress for the async path
                     } else {
                         sendUpdate(engineInitFailed ? "Local engine failed to load" : "Local engine not ready yet - try again");
                     }
@@ -279,7 +318,11 @@ public class Whisper {
             Log.e(TAG, "Error during transcription", e);
             sendUpdate("Transcription failed");
         } finally {
-            mInProgress.set(false);
+            // Async local path: mInProgress stays set until the result/error callback
+            // (releaseAsyncLocal) or the safety timeout; everything else clears now.
+            if (!asyncLocalPending) {
+                mInProgress.set(false);
+            }
         }
     }
 
@@ -351,6 +394,19 @@ public class Whisper {
             }
             sendUpdate("Remote ASR failed - retrying on-device...");
             recognizer.recognize(samples, 1, mLangCode, mAction);
+            // N1: same async gap on the fallback path - keep mInProgress set until the
+            // result/error callback (or the safety timeout) fires.
+            asyncLocalPending = true;
+            localResetHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+            localResetToken = android.os.Message.obtain();
+            localResetRunnable = () -> {
+                if (asyncLocalPending) {
+                    asyncLocalPending = false;
+                    mInProgress.set(false);
+                    sendUpdate("Transcription timed out - try again");
+                }
+            };
+            localResetHandler.postAtTime(localResetRunnable, localResetToken, 60000);
             return true;
         }
         sendUpdate("Remote ASR failed - local engine unavailable");
