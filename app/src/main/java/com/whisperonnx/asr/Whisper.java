@@ -39,6 +39,8 @@ public class Whisper {
     private final Condition hasTask = taskLock.newCondition();
     private volatile boolean taskAvailable = false;
     private Recognizer recognizer = null;
+    private volatile boolean engineReady = false;
+    private volatile boolean engineInitFailed = false;
     private Context mContext;
     private long startTime;
     private android.content.SharedPreferences sp;
@@ -100,11 +102,20 @@ public class Whisper {
             @Override
             public void onInitializationFinished() {
                 Log.d(TAG, "Recognizer initialized");
+                synchronized (Whisper.this) {
+                    engineReady = true;
+                    Whisper.this.notifyAll();
+                }
             }
 
             @Override
             public void onError(int[] reasons, long value) {
                 Log.d(TAG, "Recognizer init error");
+                synchronized (Whisper.this) {
+                    engineReady = false;
+                    engineInitFailed = true;
+                    Whisper.this.notifyAll();
+                }
             }
         });
 
@@ -130,9 +141,39 @@ public class Whisper {
     }
 
     public void unloadModel() {
-        if (recognizer != null) {
-            recognizer.destroy();
-            recognizer = null;
+        synchronized (this) {
+            if (recognizer != null) {
+                recognizer.destroy();
+                recognizer = null;
+            }
+            engineReady = false;
+            engineInitFailed = false;
+            this.notifyAll();
+        }
+    }
+
+    /**
+     * Block the calling (worker) thread until the on-device engine reports ready/failed, or up
+     * to timeoutMs. Returns true if the engine is ready to accept an utterance. Guards against
+     * the async ONNX load (Recognizer's constructor loads models on a background thread) so we
+     * never hand a buffer to a half-loaded engine (which would be silently dropped).
+     */
+    private boolean waitForEngine(long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        synchronized (this) {
+            while (!engineReady && !engineInitFailed) {
+                long remaining = deadline - System.currentTimeMillis();
+                if (remaining <= 0) {
+                    return false;
+                }
+                try {
+                    this.wait(remaining);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+            return engineReady;
         }
     }
 
@@ -198,10 +239,10 @@ public class Whisper {
                     if (recognizer == null) {
                         loadModel();
                     }
-                    if (recognizer != null) {
+                    if (recognizer != null && (engineReady || waitForEngine(15000))) {
                         recognizer.recognize(RecordBuffer.getSamples(),1, mLangCode, mAction );
                     } else {
-                        sendUpdate("Engine not initialized");
+                        sendUpdate(engineInitFailed ? "Local engine failed to load" : "Local engine not ready yet - try again");
                     }
                 }
             } else {
@@ -242,7 +283,9 @@ public class Whisper {
                     @Override
                     public void onError(String message) {
                         Log.e(TAG, "Remote ASR error: " + message);
-                        sendUpdate(message);
+                        if (!tryLocalFallback()) {
+                            sendUpdate(message);
+                        }
                     }
 
                     @Override
@@ -251,6 +294,40 @@ public class Whisper {
                         sendUpdate(message);
                     }
                 });
+    }
+
+    /**
+     * Remote ASR failed: retry the same utterance on the on-device engine when it's usable.
+     * Runs on the worker thread, so the audio buffer is still valid (transcribe() is
+     * synchronous). Returns true if the local engine accepted the utterance (or there's no
+     * local model to fall back to, in which case a specific message is posted); false to let
+     * the caller post the original remote error.
+     */
+    private boolean tryLocalFallback() {
+        File dir = mContext.getExternalFilesDir(null);
+        if (dir == null) return false;
+        File[] files = dir.listFiles();
+        if (files == null) return false;
+        int modelFiles = 0;
+        for (File f : files) if (f.isFile()) modelFiles++;
+        if (modelFiles < 6) {
+            sendUpdate("Remote ASR failed - no local model installed to fall back to");
+            return true;
+        }
+        if (recognizer == null) {
+            loadModel();
+        }
+        if (recognizer != null && (engineReady || waitForEngine(20000))) {
+            float[] samples = RecordBuffer.getSamples();
+            if (samples == null || samples.length == 0) {
+                return false;
+            }
+            sendUpdate("Remote ASR failed - retrying on-device...");
+            recognizer.recognize(samples, 1, mLangCode, mAction);
+            return true;
+        }
+        sendUpdate("Remote ASR failed - local engine unavailable");
+        return true;
     }
 
     private void sendUpdate(String message) {
