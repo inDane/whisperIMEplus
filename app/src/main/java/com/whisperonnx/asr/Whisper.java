@@ -91,10 +91,19 @@ public class Whisper {
     }
 
     public synchronized void loadModel() {
+        loadModel(false);
+    }
+
+    /**
+     * Load the on-device engine. With ignoreRemoteMode=true the live "remoteMode" setting is
+     * bypassed - required for the remote->local fallback, which must be able to start the local
+     * engine even though the user is (by definition) still in remote mode when it triggers.
+     */
+    private synchronized void loadModel(boolean ignoreRemoteMode) {
         if (recognizer != null) {
-            return; // already loaded (idempotent — safe to call on switch)
+            return; // already loaded (idempotent - safe to call on switch)
         }
-        if (sp.getBoolean("remoteMode", false)) {
+        if (!ignoreRemoteMode && sp.getBoolean("remoteMode", false)) {
             Log.d(TAG, "Remote mode: no local model to load");
             return;
         }
@@ -315,7 +324,7 @@ public class Whisper {
             return true;
         }
         if (recognizer == null) {
-            loadModel();
+            loadModel(true); // bypass the remoteMode gate - we ARE in remote mode, that's why we're falling back
         }
         if (recognizer != null && (engineReady || waitForEngine(20000))) {
             float[] samples = RecordBuffer.getSamples();
