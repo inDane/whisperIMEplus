@@ -5,3 +5,6 @@
 
 # Gradle/SDK local config (contains developer-specific paths)
 local.properties
+
+# Release signing secrets — NEVER commit
+key.properties
