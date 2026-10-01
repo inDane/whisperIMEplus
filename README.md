@@ -1,3 +1,56 @@
+# inDane fork of Whisper+
+
+> **Disclaimer:** This fork was developed with the assistance of AI tools
+> (LLM-based code generation and review). All changes were reviewed,
+> security-audited (multiple independent AI audit passes), and tested on
+> real devices by the maintainer before being released.
+
+Personal fork by [inDane](https://github.com/inDane) of
+[woheller69/Whisper+](https://github.com/woheller69/whisperIMEplus),
+synced with upstream. Everything below this notice is the original
+upstream README, unmodified.
+
+## Fork changes (on top of upstream)
+
+The changes added here were proposed upstream as
+[PR #60](https://github.com/woheller69/whisperIMEplus/pull/60), which was
+declined because upstream keeps Whisper+ strictly on-device. So the
+remote-ASR feature exists only in this fork and ships as personal
+signed release builds.
+
+- **Optional remote ASR** — dictate to a self-hosted
+  OpenAI-compatible `/v1/audio/transcriptions` endpoint (e.g. a vLLM
+  ASR server) instead of the on-device model. `https://` is enforced,
+  and the app automatically falls back to the on-device engine when the
+  remote endpoint is unreachable.
+- **Optional LLM cleanup pass** — an optional second call to a
+  chat-completions endpoint that fixes punctuation and capitalization
+  of the transcription, with a user-defined list of known terms.
+- **Privacy guarantees (kept from the upstream philosophy):**
+  - Sensitive fields (password, PIN, credit-card, and incognito /
+    `IME_FLAG_NO_PERSONALIZED_LEARNING` fields) always use the
+    on-device engine, even when remote mode is on — their audio never
+    leaves the device, and if the field changes while a remote
+    transcription is in flight, the result is discarded, never
+    committed into the wrong field.
+  - Endpoints and tokens are stored only in app-private preferences
+    (backup disabled) and are never written to logs or shown in the
+    IME UI.
+  - A **Verify** button in Settings probes the configured endpoint and
+    reports the exact outcome (OK / token rejected / DNS / timeout /
+    TLS).
+- **Security hardening** — zip-slip guard in the model extraction,
+  non-exported activities, transcript/endpoint data stripped from all
+  logs (release builds log no user content), masked token input fields,
+  removal of unused permissions (`RECEIVE_BOOT_COMPLETED`,
+  `FOREGROUND_SERVICE*`, runtime `POST_NOTIFICATIONS`), and pinned
+  dependency versions.
+- **Build & release** — release signing wired via a gitignored
+  `key.properties` (see `app/build.gradle`); signed releases are
+  personal builds, not distributed via F-Droid.
+
+---
+
 ```
 Google has announced that, starting in 2026/2027, all apps on certified Android devices
 will require the developer to submit personal identity details directly to Google.
