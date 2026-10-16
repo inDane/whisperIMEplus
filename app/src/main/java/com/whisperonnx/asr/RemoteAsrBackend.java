@@ -28,6 +28,8 @@ public class RemoteAsrBackend {
         void onResult(String text, String language);
         void onError(String message);
         void onStatus(String message);
+        /** LLM cleanup result rejected by the plausibility guard; raw text is kept. */
+        default void onCleanupRejected() {}
     }
 
     private static final String TAG = "RemoteAsrBackend";
@@ -178,6 +180,7 @@ public class RemoteAsrBackend {
                     Log.w(TAG, "Cleanup result rejected (\"" + cleaned.substring(0, Math.min(60, cleaned.length()))
                             + "...\" vs raw " + text.length() + " chars), keeping raw text");
                     listener.onStatus("Cleanup result rejected, raw text kept");
+                    listener.onCleanupRejected();
                     return text;
                 }
                 Log.d(TAG, "Cleanup took " + ms + " ms, " + cleaned.length() + " chars");

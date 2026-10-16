@@ -448,6 +448,14 @@ public class WhisperInputMethodService extends InputMethodService {
                 }
                 if (modeAuto && commitSuccess) handler.postDelayed(() -> switchToPreviousInputMethod(), 100);  //slightly delayed, otherwise some apps, e.g. WhatsApp, do not accept the committed text (commitText on inactive InputConnection)
             }
+
+            @Override
+            public void onCleanupRejected() {
+                // The status line is cleared by onResultReceived, so a rejection would otherwise be
+                // invisible — toast it instead (same pattern as the field-changed clipboard notice).
+                handler.post(() ->
+                        Toast.makeText(WhisperInputMethodService.this, R.string.cleanup_rejected, Toast.LENGTH_LONG).show());
+            }
         });
     }
 

@@ -23,6 +23,8 @@ public class Whisper {
     public interface WhisperListener {
         void onUpdateReceived(String message);
         void onResultReceived(WhisperResult result);
+        /** LLM cleanup result rejected by the plausibility guard; raw transcription was committed. */
+        default void onCleanupRejected() {}
     }
 
     private static final String TAG = "Whisper";
@@ -362,6 +364,11 @@ public class Whisper {
                     public void onStatus(String message) {
                         Log.d(TAG, "Remote status: " + message);
                         sendUpdate(message);
+                    }
+
+                    @Override
+                    public void onCleanupRejected() {
+                        if (mUpdateListener != null) mUpdateListener.onCleanupRejected();
                     }
                 });
     }
