@@ -49,6 +49,8 @@ public class SettingsActivity extends AppCompatActivity {
     private CheckBox modeSimpleChinese;
     private CheckBox modeSimpleChineseIME;
     private CheckBox modeBluetooth;
+    private View layoutModeChineseIME;
+    private View layoutModeChinese;
     private String langCodeIME = "";
     private RangeSlider minSilence;
     private int langSelected;
@@ -64,6 +66,9 @@ public class SettingsActivity extends AppCompatActivity {
 
         sp = PreferenceManager.getDefaultSharedPreferences(this);
         langCodeIME = sp.getString("language", "auto");
+
+        layoutModeChineseIME = findViewById(R.id.layout_mode_chinese_ime);
+        layoutModeChinese = findViewById(R.id.layout_mode_chinese);
 
         if (!sp.contains("langSelected")){
             SharedPreferences.Editor editor = sp.edit();
@@ -114,7 +119,6 @@ public class SettingsActivity extends AppCompatActivity {
 
         LanguagePairAdapter languagePairAdapter1IME = new LanguagePairAdapter(this, android.R.layout.simple_spinner_item, languagePairs);
         LanguagePairAdapter languagePairAdapter2IME = new LanguagePairAdapter(this, android.R.layout.simple_spinner_item, languagePairs);
-        languagePairAdapter1IME.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerLanguage1IME.setAdapter(languagePairAdapter1IME);
         spinnerLanguage2IME.setAdapter(languagePairAdapter2IME);
         String langCode1IME = sp.getString("language1", "auto");
@@ -133,6 +137,7 @@ public class SettingsActivity extends AppCompatActivity {
                     editor.putString("language",languagePairs.get(i).first);
                 }
                 editor.apply();
+                updateChineseVisibility();
             }
 
             @Override
@@ -151,6 +156,7 @@ public class SettingsActivity extends AppCompatActivity {
                     editor.putString("language",languagePairs.get(i).first);
                 }
                 editor.apply();
+                updateChineseVisibility();
 
             }
 
@@ -183,7 +189,6 @@ public class SettingsActivity extends AppCompatActivity {
         spinnerLanguage = findViewById(R.id.spnrLanguage);
 
         LanguagePairAdapter languagePairAdapter = new LanguagePairAdapter(this, android.R.layout.simple_spinner_item, languagePairs);
-        languagePairAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         spinnerLanguage.setAdapter(languagePairAdapter);
 
         String langCode = sp.getString("recognitionServiceLanguage", "auto");
@@ -194,6 +199,7 @@ public class SettingsActivity extends AppCompatActivity {
                 SharedPreferences.Editor editor = sp.edit();
                 editor.putString("recognitionServiceLanguage", languagePairs.get(i).first);
                 editor.apply();
+                updateChineseVisibility();
             }
 
             @Override
@@ -223,6 +229,7 @@ public class SettingsActivity extends AppCompatActivity {
         });
 
         setupRemoteSettings();
+        updateChineseVisibility();
 
         checkPermissions();
 
@@ -423,6 +430,21 @@ public class SettingsActivity extends AppCompatActivity {
                         .setPositiveButton("OK", null).show();
             });
         }).start();
+    }
+
+    private boolean isAutoOrChinese(String langCode) {
+        return "auto".equals(langCode) || "zh".equals(langCode);
+    }
+
+    private void updateChineseVisibility() {
+        String lang1 = sp.getString("language1", "auto");
+        String lang2 = sp.getString("language2", "auto");
+        layoutModeChineseIME.setVisibility(
+                (isAutoOrChinese(lang1) || isAutoOrChinese(lang2)) ? View.VISIBLE : View.GONE);
+
+        String recLang = sp.getString("recognitionServiceLanguage", "auto");
+        layoutModeChinese.setVisibility(
+                isAutoOrChinese(recLang) ? View.VISIBLE : View.GONE);
     }
 
     private void checkPermissions() {
